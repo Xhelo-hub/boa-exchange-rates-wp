@@ -317,6 +317,9 @@ class BoA_Scraper {
     /**
      * Parse a table row to extract rate data
      *
+     * Table structure: Currency Name | Code | Rate | Change
+     * We want the rate (3rd column), not the change (4th column)
+     *
      * @param DOMNodeList $cells Table cells
      * @return array|null Rate data or null
      */
@@ -333,19 +336,27 @@ class BoA_Scraper {
         $rate_value = null;
 
         foreach ($cell_values as $index => $value) {
-            // Check if it's a rate (numeric value)
-            $cleaned = preg_replace('/[^\d.,]/', '', $value);
-            $cleaned = str_replace(',', '.', $cleaned);
-
-            if (is_numeric($cleaned) && floatval($cleaned) > 0) {
-                $rate_value = floatval($cleaned);
-                continue;
-            }
-
             // Check if it's a currency code (3 uppercase letters)
             if (preg_match('/^[A-Z]{3}$/', $value)) {
                 $currency_code = $value;
                 continue;
+            }
+
+            // Check if it's a rate (numeric value)
+            // Only take the FIRST numeric value (the rate), not subsequent ones (the change)
+            $cleaned = preg_replace('/[^\d.,\-]/', '', $value);
+            $cleaned = str_replace(',', '.', $cleaned);
+
+            // Remove leading minus/plus sign for validation
+            $abs_cleaned = ltrim($cleaned, '+-');
+
+            if ($rate_value === null && is_numeric($abs_cleaned) && floatval($abs_cleaned) > 0) {
+                // Only accept values that look like exchange rates (typically > 1 for ALL/foreign currency)
+                $potential_rate = floatval($abs_cleaned);
+                if ($potential_rate > 1) {
+                    $rate_value = $potential_rate;
+                    continue;
+                }
             }
 
             // Otherwise it might be a currency name
