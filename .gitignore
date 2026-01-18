@@ -1,0 +1,36 @@
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# WordPress
+wp-config.php
+wp-content/uploads/
+wp-content/upgrade/
+
+# Logs
+*.log
+debug.log
+
+# Dependencies (if using composer)
+/vendor/
+composer.lock
+
+# Node (if using build tools)
+/node_modules/
+package-lock.json
+yarn.lock
+
+# Build artifacts
+/dist/
+/build/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
