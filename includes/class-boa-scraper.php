@@ -315,104 +315,51 @@ class BoA_Scraper {
     }
 
     /**
-     * Extract the first decimal number from a string
-     * Handles formats like "83.09", "83,09", "83.09 (+0.15)", etc.
-     *
-     * @param string $text Input text
-     * @return float|null Extracted number or null
-     */
-    private function extract_first_number($text) {
-        // Match a decimal number (handles both . and , as decimal separator)
-        // This will match the FIRST number in the string
-        if (preg_match('/(\d+[.,]\d+)/', $text, $matches)) {
-            $number = str_replace(',', '.', $matches[1]);
-            return floatval($number);
-        }
-        // Try integer
-        if (preg_match('/(\d+)/', $text, $matches)) {
-            return floatval($matches[1]);
-        }
-        return null;
-    }
-
-    /**
      * Parse a table row to extract rate data
      *
-     * Table structure: Currency Name | Code | Rate | Change
-     * We want the rate (3rd column, index 2), not the change (4th column)
+     * Table structure:
+     * Col 0: Currency name (Albanian)
+     * Col 1: Currency code
+     * Col 2: Exchange rate (what we need)
+     * Col 3: Change (ignore)
      *
      * @param DOMNodeList $cells Table cells
      * @return array|null Rate data or null
      */
     private function parse_table_row($cells) {
-        $cell_values = array();
-
-        foreach ($cells as $cell) {
-            $cell_values[] = trim($cell->textContent);
-        }
-
-        $num_cells = count($cell_values);
-
-        // Need at least 3 cells: name/code, rate, something
-        if ($num_cells < 3) {
+        // Need at least 3 columns: name, code, rate
+        if ($cells->length < 3) {
             return null;
         }
 
+        $col0 = trim($cells->item(0)->textContent); // Albanian name
+        $col1 = trim($cells->item(1)->textContent); // Currency code
+        $col2 = trim($cells->item(2)->textContent); // Rate
+
+        // Get currency code from column 1
         $currency_code = '';
-        $currency_name = '';
-        $rate_value = null;
-
-        // Strategy 1: Look for currency code first to identify the row
-        foreach ($cell_values as $index => $value) {
-            // Currency code is exactly 3 uppercase letters (or with unit like "1 USD")
-            if (preg_match('/\b([A-Z]{3})\b/', $value, $matches)) {
-                $currency_code = $matches[1];
-                break;
-            }
+        if (preg_match('/([A-Z]{3})/', $col1, $matches)) {
+            $currency_code = $matches[1];
         }
 
-        // If no code found, try to get it from currency name
-        if (!$currency_code) {
-            foreach ($cell_values as $value) {
-                if (strlen($value) > 3 && !preg_match('/^\d/', $value)) {
-                    $code = $this->get_code_from_name($value);
-                    if ($code) {
-                        $currency_code = $code;
-                        $currency_name = $value;
-                        break;
-                    }
-                }
-            }
+        // If no code in col1, try to get from Albanian name
+        if (empty($currency_code)) {
+            $currency_code = $this->get_code_from_name($col0);
         }
 
-        if (!$currency_code) {
+        if (empty($currency_code)) {
             return null;
         }
 
-        // Strategy 2: Find the rate - it's the first cell containing a number > 1
-        // Skip cells that are clearly the currency name or code
-        foreach ($cell_values as $index => $value) {
-            // Skip if this looks like the currency name (starts with letter, long text)
-            if (preg_match('/^[A-Za-z]/', $value) && strlen($value) > 5) {
-                continue;
-            }
-
-            // Skip if this is just the currency code
-            if (preg_match('/^[A-Z]{3}$/', trim($value)) || preg_match('/^\d+\s+[A-Z]{3}$/', trim($value))) {
-                continue;
-            }
-
-            // Try to extract a number from this cell
-            $number = $this->extract_first_number($value);
-
-            if ($number !== null && $number > 1) {
-                $rate_value = $number;
-                break; // Take the FIRST valid rate found
-            }
+        // Extract rate from column 2
+        $rate_text = $col2;
+        if (preg_match('/(\d+[.,]\d+)/', $rate_text, $matches)) {
+            $rate_text = $matches[1];
         }
+        $rate_text = str_replace(',', '.', $rate_text);
+        $rate = floatval($rate_text);
 
-        // Validate we have required data
-        if (!$currency_code || $rate_value === null) {
+        if ($rate <= 0) {
             return null;
         }
 
@@ -428,7 +375,7 @@ class BoA_Scraper {
         return array(
             'code' => $currency_code,
             'name' => $currency_info['name'],
-            'rate' => $rate_value,
+            'rate' => $rate,
             'icon' => $currency_info['icon'],
             'unit' => $currency_info['unit'],
         );
